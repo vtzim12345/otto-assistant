@@ -1,52 +1,64 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import HomeScreen from './src/screens/HomeScreen';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
+import LoginScreen from './src/screens/LoginScreen';
 import ChatScreen from './src/screens/ChatScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
-import { Ionicons } from '@expo/vector-icons';
-import { AuthContext } from './src/contexts/AuthContext';
-import { useAuth } from './src/hooks/useAuth';
-import LoginScreen from './src/screens/LoginScreen';
 
 const Tab = createBottomTabNavigator();
 
 export default function App() {
-  const { state, bootstrap } = useAuth();
+  const [isSignedIn, setIsSignedIn] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  React.useEffect(() => {
-    bootstrap();
+  useEffect(() => {
+    bootstrapAsync();
   }, []);
 
-  if (state.isLoading) {
+  const bootstrapAsync = async () => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      setIsSignedIn(!!token);
+    } catch (e) {
+      console.error('Failed to restore token', e);
+    }
+    setIsLoading(false);
+  };
+
+  if (isLoading) {
     return null;
   }
 
   return (
     <NavigationContainer>
-      {state.isSignedIn ? (
+      {isSignedIn ? (
         <Tab.Navigator
           screenOptions={({ route }) => ({
             tabBarIcon: ({ focused, color, size }) => {
               let iconName;
-              if (route.name === 'Home') {
-                iconName = focused ? 'home' : 'home-outline';
-              } else if (route.name === 'Chat') {
-                iconName = focused ? 'chatbox' : 'chatbox-outline';
+              if (route.name === 'Chat') {
+                iconName = focused ? 'chatbubble' : 'chatbubble-outline';
               } else if (route.name === 'Settings') {
                 iconName = focused ? 'settings' : 'settings-outline';
               }
               return <Ionicons name={iconName} size={size} color={color} />;
             },
+            tabBarActiveTintColor: '#00D4FF',
+            tabBarInactiveTintColor: '#999',
             headerShown: false,
+            tabBarStyle: {
+              backgroundColor: '#0F172A',
+              borderTopColor: '#1E293B',
+            },
           })}
         >
-          <Tab.Screen name="Home" component={HomeScreen} />
-          <Tab.Screen name="Chat" component={ChatScreen} />
-          <Tab.Screen name="Settings" component={SettingsScreen} />
+          <Tab.Screen name="Chat" component={ChatScreen} initialParams={{ setIsSignedIn }} />
+          <Tab.Screen name="Settings" component={SettingsScreen} initialParams={{ setIsSignedIn }} />
         </Tab.Navigator>
       ) : (
-        <LoginScreen />
+        <LoginScreen setIsSignedIn={setIsSignedIn} />
       )}
     </NavigationContainer>
   );

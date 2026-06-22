@@ -8,26 +8,51 @@ import {
   SafeAreaView,
   KeyboardAvoidingView,
   Platform,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
 import { Ionicons } from '@expo/vector-icons';
+import { API_URL } from '../config/api';
 
-const LoginScreen = ({ navigation }) => {
+const LoginScreen = ({ setIsSignedIn }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isLogin, setIsLogin] = useState(true);
   const [name, setName] = useState('');
+  const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
+    if (!email || !password) {
+      Alert.alert('Error', 'Please fill in all fields');
+      return;
+    }
+
+    if (!isLogin && !name) {
+      Alert.alert('Error', 'Please enter your name');
+      return;
+    }
+
     setLoading(true);
     try {
-      if (isLogin) {
-        // Login logic
-      } else {
-        // Register logic
-      }
+      const endpoint = isLogin ? '/auth/login' : '/auth/register';
+      const payload = isLogin
+        ? { email, password }
+        : { email, password, name };
+
+      const response = await axios.post(`${API_URL}${endpoint}`, payload);
+      const { token } = response.data;
+
+      await AsyncStorage.setItem('userToken', token);
+      await AsyncStorage.setItem('userEmail', email);
+      setIsSignedIn(true);
     } catch (error) {
       console.error('Auth error:', error);
+      Alert.alert(
+        'Error',
+        error.response?.data?.detail || 'Authentication failed. Check your credentials.'
+      );
     } finally {
       setLoading(false);
     }
@@ -52,6 +77,7 @@ const LoginScreen = ({ navigation }) => {
               value={name}
               onChangeText={setName}
               placeholderTextColor="#999"
+              editable={!loading}
             />
           )}
           <TextInput
@@ -62,6 +88,7 @@ const LoginScreen = ({ navigation }) => {
             keyboardType="email-address"
             autoCapitalize="none"
             placeholderTextColor="#999"
+            editable={!loading}
           />
           <TextInput
             style={styles.input}
@@ -70,42 +97,34 @@ const LoginScreen = ({ navigation }) => {
             onChangeText={setPassword}
             secureTextEntry
             placeholderTextColor="#999"
+            editable={!loading}
           />
 
           <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
+            style={[styles.button, (loading || !email || !password) && styles.buttonDisabled]}
             onPress={handleSubmit}
-            disabled={loading}
+            disabled={loading || !email || !password}
           >
-            <Text style={styles.buttonText}>
-              {loading ? 'Loading...' : isLogin ? 'Sign In' : 'Sign Up'}
-            </Text>
+            {loading ? (
+              <ActivityIndicator color="#0F172A" />
+            ) : (
+              <Text style={styles.buttonText}>
+                {isLogin ? 'Sign In' : 'Sign Up'}
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
 
-        <View style={styles.divider}>
-          <View style={styles.line} />
-          <Text style={styles.dividerText}>Or continue with</Text>
-          <View style={styles.line} />
-        </View>
-
-        <View style={styles.socialButtons}>
-          <TouchableOpacity style={styles.socialButton}>
-            <Ionicons name="logo-google" size={24} color="#fff" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.socialButton}>
-            <Ionicons name="logo-apple" size={24} color="#fff" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.socialButton}>
-            <Ionicons name="logo-github" size={24} color="#fff" />
-          </TouchableOpacity>
-        </View>
-
-        <TouchableOpacity onPress={() => setIsLogin(!isLogin)}>
+        <TouchableOpacity onPress={() => setIsLogin(!isLogin)} disabled={loading}>
           <Text style={styles.toggleText}>
             {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
           </Text>
         </TouchableOpacity>
+
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>Created by Victor G.</Text>
+          <Text style={styles.footerEmail}>suporte.dev.victor@gmail.com</Text>
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -164,42 +183,27 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 24,
-  },
-  line: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#334155',
-  },
-  dividerText: {
-    marginHorizontal: 12,
-    color: '#999',
-    fontSize: 14,
-  },
-  socialButtons: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginBottom: 24,
-    gap: 12,
-  },
-  socialButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#1E293B',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
   toggleText: {
     textAlign: 'center',
     color: '#00D4FF',
     fontSize: 14,
     marginTop: 16,
+  },
+  footer: {
+    marginTop: 40,
+    alignItems: 'center',
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#334155',
+  },
+  footerText: {
+    color: '#999',
+    fontSize: 12,
+  },
+  footerEmail: {
+    color: '#00D4FF',
+    fontSize: 11,
+    marginTop: 4,
   },
 });
 

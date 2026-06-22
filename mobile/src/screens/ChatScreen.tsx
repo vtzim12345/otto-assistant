@@ -1,32 +1,53 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   SafeAreaView,
-  ScrollView,
-  TouchableOpacity,
   FlatList,
+  TouchableOpacity,
+  TextInput,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import { Ionicons } from '@expo/vector-icons';
+import { API_URL } from '../config/api';
 
-const ChatScreen = () => {
+const ChatScreen = ({ setIsSignedIn }) => {
   const [messages, setMessages] = useState([
     {
-      id: '1',
+      id: '0',
       role: 'assistant',
-      content: "Hi! I'm OTTO, your intelligent assistant. How can I help you today? 🎯",
+      content: "Hi! I'm OTTO, your intelligent assistant. How can I help you today? 🤖",
       timestamp: new Date(),
     },
   ]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
-  const [recording, setRecording] = useState(false);
+  const [token, setToken] = useState('');
+  const flatListRef = useRef(null);
+
+  useEffect(() => {
+    loadToken();
+  }, []);
+
+  const loadToken = async () => {
+    try {
+      const userToken = await AsyncStorage.getItem('userToken');
+      if (userToken) {
+        setToken(userToken);
+      } else {
+        setIsSignedIn(false);
+      }
+    } catch (error) {
+      console.error('Error loading token:', error);
+    }
+  };
 
   const handleSendMessage = async () => {
-    if (!inputText.trim()) return;
+    if (!inputText.trim() || loading) return;
 
     const userMessage = {
       id: Date.now().toString(),
@@ -35,33 +56,40 @@ const ChatScreen = () => {
       timestamp: new Date(),
     };
 
-    setMessages([...messages, userMessage]);
+    setMessages((prev) => [...prev, userMessage]);
     setInputText('');
     setLoading(true);
 
     try {
-      const response = await axios.post('http://localhost:8000/chat/message', {
-        message: inputText,
-      });
+      const response = await axios.post(
+        `${API_URL}/chat/message`,
+        { message: inputText, language: 'pt-BR' },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
       const assistantMessage = {
-        id: Date.now().toString(),
+        id: response.data.id,
         role: 'assistant',
         content: response.data.response,
-        timestamp: new Date(),
+        timestamp: new Date(response.data.timestamp),
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
+      flatListRef.current?.scrollToEnd({ animated: true });
     } catch (error) {
       console.error('Error sending message:', error);
+      const errorMsg = error.response?.data?.detail || 'Failed to send message';
+      Alert.alert('Error', errorMsg);
+      
+      // Remove the user message if sending failed
+      setMessages((prev) => prev.filter((msg) => msg.id !== userMessage.id));
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleVoiceInput = async () => {
-    setRecording(!recording);
-    // Implement voice input logic
   };
 
   const renderMessage = ({ item }) => {
@@ -102,17 +130,18 @@ const ChatScreen = () => {
       </View>
 
       <FlatList
+        ref={flatListRef}
         data={messages}
         renderItem={renderMessage}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.messagesList}
-        inverted
+        onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
       />
 
       {loading && (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="small" color="#00D4FF" />
-          <Text style={styles.loadingText}>Otto is thinking...</Text>
+          <Text style={styles.loadingText}>OTTO is thinking...</Text>
         </View>
       )}
 
@@ -125,19 +154,10 @@ const ChatScreen = () => {
           onChangeText={setInputText}
           multiline
           maxHeight={100}
+          editable={!loading}
         />
         <TouchableOpacity
-          style={styles.voiceButton}
-          onPress={handleVoiceInput}
-        >
-          <Ionicons
-            name={recording ? 'mic' : 'mic-outline'}
-            size={24}
-            color={recording ? '#FF4444' : '#00D4FF'}
-          />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
+          style={[styles.sendButton, (!inputText.trim() || loading) && styles.sendButtonDisabled]}
           onPress={handleSendMessage}
           disabled={!inputText.trim() || loading}
         >
@@ -233,14 +253,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     maxHeight: 100,
-  },
-  voiceButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#1E293B',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   sendButton: {
     width: 40,
